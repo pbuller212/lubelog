@@ -21,6 +21,9 @@ namespace CarCareTracker.Controllers
         private readonly IReminderRecordDataAccess _reminderRecordDataAccess;
         private readonly IUpgradeRecordDataAccess _upgradeRecordDataAccess;
         private readonly IOdometerRecordDataAccess _odometerRecordDataAccess;
+        private readonly ISupplyRecordDataAccess _supplyRecordDataAccess;
+        private readonly IPlanRecordDataAccess _planRecordDataAccess;
+        private readonly IPlanRecordTemplateDataAccess _planRecordTemplateDataAccess;
         private readonly IUserAccessDataAccess _userAccessDataAccess;
         private readonly IUserRecordDataAccess _userRecordDataAccess;
         private readonly IReminderHelper _reminderHelper;
@@ -42,6 +45,9 @@ namespace CarCareTracker.Controllers
             IReminderRecordDataAccess reminderRecordDataAccess,
             IUpgradeRecordDataAccess upgradeRecordDataAccess,
             IOdometerRecordDataAccess odometerRecordDataAccess,
+            ISupplyRecordDataAccess supplyRecordDataAccess,
+            IPlanRecordDataAccess planRecordDataAccess,
+            IPlanRecordTemplateDataAccess planRecordTemplateDataAccess,
             IUserAccessDataAccess userAccessDataAccess,
             IUserRecordDataAccess userRecordDataAccess,
             IMailHelper mailHelper,
@@ -60,6 +66,9 @@ namespace CarCareTracker.Controllers
             _reminderRecordDataAccess = reminderRecordDataAccess;
             _upgradeRecordDataAccess = upgradeRecordDataAccess;
             _odometerRecordDataAccess = odometerRecordDataAccess;
+            _supplyRecordDataAccess = supplyRecordDataAccess;
+            _planRecordDataAccess = planRecordDataAccess;
+            _planRecordTemplateDataAccess = planRecordTemplateDataAccess;
             _userAccessDataAccess = userAccessDataAccess;
             _userRecordDataAccess = userRecordDataAccess;
             _mailHelper = mailHelper;
@@ -90,19 +99,99 @@ namespace CarCareTracker.Controllers
             }
             return Json(result);
         }
+
+        [HttpGet]
+        [Route("/api/vehicle/info")]
+        public IActionResult VehicleInfo(int vehicleId)
+        {
+            //stats for a specific or all vehicles
+            List<Vehicle> vehicles = new List<Vehicle>();
+            if (vehicleId != default)
+            {
+                if (_userLogic.UserCanEditVehicle(GetUserID(), vehicleId))
+                {
+                    vehicles.Add(_dataAccess.GetVehicleById(vehicleId));
+                } else
+                {
+                    return new RedirectResult("/Error/Unauthorized");
+                }
+            } else
+            {
+                var result = _dataAccess.GetVehicles();
+                if (!User.IsInRole(nameof(UserData.IsRootUser)))
+                {
+                    result = _userLogic.FilterUserVehicles(result, GetUserID());
+                }
+                vehicles.AddRange(result);
+            }
+
+            List<VehicleInfo> apiResult = new List<VehicleInfo>();
+
+            foreach(Vehicle vehicle in vehicles)
+            {
+                var currentMileage = _vehicleLogic.GetMaxMileage(vehicle.Id);
+                var reminders = _reminderRecordDataAccess.GetReminderRecordsByVehicleId(vehicle.Id);
+                var results = _reminderHelper.GetReminderRecordViewModels(reminders, currentMileage, DateTime.Now);
+
+                var serviceRecords = _serviceRecordDataAccess.GetServiceRecordsByVehicleId(vehicle.Id);
+                var repairRecords = _collisionRecordDataAccess.GetCollisionRecordsByVehicleId(vehicle.Id);
+                var upgradeRecords = _upgradeRecordDataAccess.GetUpgradeRecordsByVehicleId(vehicle.Id);
+                var gasRecords = _gasRecordDataAccess.GetGasRecordsByVehicleId(vehicle.Id);
+                var taxRecords = _taxRecordDataAccess.GetTaxRecordsByVehicleId(vehicle.Id);
+
+                var resultToAdd = new VehicleInfo()
+                {
+                    VehicleData = vehicle,
+                    LastReportedOdometer = currentMileage,
+                    ServiceRecordCount = serviceRecords.Count(),
+                    ServiceRecordCost = serviceRecords.Sum(x=>x.Cost),
+                    RepairRecordCount = repairRecords.Count(),
+                    RepairRecordCost = repairRecords.Sum(x=>x.Cost),
+                    UpgradeRecordCount = upgradeRecords.Count(),
+                    UpgradeRecordCost = upgradeRecords.Sum(x=>x.Cost),
+                    GasRecordCount = gasRecords.Count(),
+                    GasRecordCost = gasRecords.Sum(x=>x.Cost),
+                    TaxRecordCount = taxRecords.Count(),
+                    TaxRecordCost = taxRecords.Sum(x=> x.Cost),
+                    VeryUrgentReminderCount = results.Count(x => x.Urgency == ReminderUrgency.VeryUrgent),
+                    PastDueReminderCount = results.Count(x => x.Urgency == ReminderUrgency.PastDue),
+                    UrgentReminderCount = results.Count(x => x.Urgency == ReminderUrgency.Urgent),
+                    NotUrgentReminderCount = results.Count(x => x.Urgency == ReminderUrgency.NotUrgent)
+                };
+                //set next reminder
+                if (results.Any(x => (x.Metric == ReminderMetric.Date || x.Metric == ReminderMetric.Both) && x.Date >= DateTime.Now.Date))
+                {
+                    resultToAdd.NextReminder = results.Where(x => x.Date >= DateTime.Now.Date).OrderBy(x => x.Date).Select(x => new ReminderExportModel { Description = x.Description, Urgency = x.Urgency.ToString(), Metric = x.Metric.ToString(), Notes = x.Notes, DueDate = x.Date.ToShortDateString(), DueOdometer = x.Mileage.ToString() }).First();
+                }
+                else if (results.Any(x => (x.Metric == ReminderMetric.Odometer || x.Metric == ReminderMetric.Both) && x.Mileage >= currentMileage))
+                {
+                    resultToAdd.NextReminder = results.Where(x => x.Mileage >= currentMileage).OrderBy(x => x.Mileage).Select(x => new ReminderExportModel { Description = x.Description, Urgency = x.Urgency.ToString(), Metric = x.Metric.ToString(), Notes = x.Notes, DueDate = x.Date.ToShortDateString(), DueOdometer = x.Mileage.ToString() }).First();
+                }
+                apiResult.Add(resultToAdd);
+            }
+            return Json(apiResult);
+        }
         [TypeFilter(typeof(CollaboratorFilter))]
         [HttpGet]
         [Route("/api/vehicle/servicerecords")]
         public IActionResult ServiceRecords(int vehicleId)
         {
+            if (vehicleId == default)
+            {
+                var response = new OperationResponse();
+                response.Success = false;
+                response.Message = "Must provide a valid vehicle id";
+                Response.StatusCode = 400;
+                return Json(response);
+            }
             var vehicleRecords = _serviceRecordDataAccess.GetServiceRecordsByVehicleId(vehicleId);
-            var result = vehicleRecords.Select(x => new ServiceRecordExportModel { Date = x.Date.ToShortDateString(), Description = x.Description, Cost = x.Cost.ToString(), Notes = x.Notes, Odometer = x.Mileage.ToString() });
+            var result = vehicleRecords.Select(x => new GenericRecordExportModel { Date = x.Date.ToShortDateString(), Description = x.Description, Cost = x.Cost.ToString(), Notes = x.Notes, Odometer = x.Mileage.ToString(), ExtraFields = x.ExtraFields });
             return Json(result);
         }
         [TypeFilter(typeof(CollaboratorFilter))]
         [HttpPost]
         [Route("/api/vehicle/servicerecords/add")]
-        public IActionResult AddServiceRecord(int vehicleId, ServiceRecordExportModel input)
+        public IActionResult AddServiceRecord(int vehicleId, GenericRecordExportModel input)
         {
             var response = new OperationResponse();
             if (vehicleId == default)
@@ -131,7 +220,8 @@ namespace CarCareTracker.Controllers
                     Mileage = int.Parse(input.Odometer),
                     Description = input.Description,
                     Notes = string.IsNullOrWhiteSpace(input.Notes) ? "" : input.Notes,
-                    Cost = decimal.Parse(input.Cost)
+                    Cost = decimal.Parse(input.Cost),
+                    ExtraFields = input.ExtraFields
                 };
                 _serviceRecordDataAccess.SaveServiceRecordToVehicle(serviceRecord);
                 if (_config.GetUserConfig(User).EnableAutoOdometerInsert)
@@ -163,14 +253,22 @@ namespace CarCareTracker.Controllers
         [Route("/api/vehicle/repairrecords")]
         public IActionResult RepairRecords(int vehicleId)
         {
+            if (vehicleId == default)
+            {
+                var response = new OperationResponse();
+                response.Success = false;
+                response.Message = "Must provide a valid vehicle id";
+                Response.StatusCode = 400;
+                return Json(response);
+            }
             var vehicleRecords = _collisionRecordDataAccess.GetCollisionRecordsByVehicleId(vehicleId);
-            var result = vehicleRecords.Select(x => new ServiceRecordExportModel { Date = x.Date.ToShortDateString(), Description = x.Description, Cost = x.Cost.ToString(), Notes = x.Notes, Odometer = x.Mileage.ToString() });
+            var result = vehicleRecords.Select(x => new GenericRecordExportModel { Date = x.Date.ToShortDateString(), Description = x.Description, Cost = x.Cost.ToString(), Notes = x.Notes, Odometer = x.Mileage.ToString(), ExtraFields = x.ExtraFields });
             return Json(result);
         }
         [TypeFilter(typeof(CollaboratorFilter))]
         [HttpPost]
         [Route("/api/vehicle/repairrecords/add")]
-        public IActionResult AddRepairRecord(int vehicleId, ServiceRecordExportModel input)
+        public IActionResult AddRepairRecord(int vehicleId, GenericRecordExportModel input)
         {
             var response = new OperationResponse();
             if (vehicleId == default)
@@ -199,7 +297,8 @@ namespace CarCareTracker.Controllers
                     Mileage = int.Parse(input.Odometer),
                     Description = input.Description,
                     Notes = string.IsNullOrWhiteSpace(input.Notes) ? "" : input.Notes,
-                    Cost = decimal.Parse(input.Cost)
+                    Cost = decimal.Parse(input.Cost),
+                    ExtraFields = input.ExtraFields
                 };
                 _collisionRecordDataAccess.SaveCollisionRecordToVehicle(repairRecord);
                 if (_config.GetUserConfig(User).EnableAutoOdometerInsert)
@@ -231,14 +330,22 @@ namespace CarCareTracker.Controllers
         [Route("/api/vehicle/upgraderecords")]
         public IActionResult UpgradeRecords(int vehicleId)
         {
+            if (vehicleId == default)
+            {
+                var response = new OperationResponse();
+                response.Success = false;
+                response.Message = "Must provide a valid vehicle id";
+                Response.StatusCode = 400;
+                return Json(response);
+            }
             var vehicleRecords = _upgradeRecordDataAccess.GetUpgradeRecordsByVehicleId(vehicleId);
-            var result = vehicleRecords.Select(x => new ServiceRecordExportModel { Date = x.Date.ToShortDateString(), Description = x.Description, Cost = x.Cost.ToString(), Notes = x.Notes, Odometer = x.Mileage.ToString() });
+            var result = vehicleRecords.Select(x => new GenericRecordExportModel { Date = x.Date.ToShortDateString(), Description = x.Description, Cost = x.Cost.ToString(), Notes = x.Notes, Odometer = x.Mileage.ToString(), ExtraFields = x.ExtraFields });
             return Json(result);
         }
         [TypeFilter(typeof(CollaboratorFilter))]
         [HttpPost]
         [Route("/api/vehicle/upgraderecords/add")]
-        public IActionResult AddUpgradeRecord(int vehicleId, ServiceRecordExportModel input)
+        public IActionResult AddUpgradeRecord(int vehicleId, GenericRecordExportModel input)
         {
             var response = new OperationResponse();
             if (vehicleId == default)
@@ -267,7 +374,8 @@ namespace CarCareTracker.Controllers
                     Mileage = int.Parse(input.Odometer),
                     Description = input.Description,
                     Notes = string.IsNullOrWhiteSpace(input.Notes) ? "" : input.Notes,
-                    Cost = decimal.Parse(input.Cost)
+                    Cost = decimal.Parse(input.Cost),
+                    ExtraFields = input.ExtraFields
                 };
                 _upgradeRecordDataAccess.SaveUpgradeRecordToVehicle(upgradeRecord);
                 if (_config.GetUserConfig(User).EnableAutoOdometerInsert)
@@ -299,7 +407,15 @@ namespace CarCareTracker.Controllers
         [Route("/api/vehicle/taxrecords")]
         public IActionResult TaxRecords(int vehicleId)
         {
-            var result = _taxRecordDataAccess.GetTaxRecordsByVehicleId(vehicleId);
+            if (vehicleId == default)
+            {
+                var response = new OperationResponse();
+                response.Success = false;
+                response.Message = "Must provide a valid vehicle id";
+                Response.StatusCode = 400;
+                return Json(response);
+            }
+            var result = _taxRecordDataAccess.GetTaxRecordsByVehicleId(vehicleId).Select(x => new TaxRecordExportModel { Date = x.Date.ToShortDateString(), Description = x.Description, Cost = x.Cost.ToString(), Notes = x.Notes, ExtraFields = x.ExtraFields });
             return Json(result);
         }
         [TypeFilter(typeof(CollaboratorFilter))]
@@ -332,7 +448,8 @@ namespace CarCareTracker.Controllers
                     Date = DateTime.Parse(input.Date),
                     Description = input.Description,
                     Notes = string.IsNullOrWhiteSpace(input.Notes) ? "" : input.Notes,
-                    Cost = decimal.Parse(input.Cost)
+                    Cost = decimal.Parse(input.Cost),
+                    ExtraFields = input.ExtraFields
                 };
                 _taxRecordDataAccess.SaveTaxRecordToVehicle(taxRecord);
                 StaticHelper.NotifyAsync(_config.GetWebHookUrl(), vehicleId, User.Identity.Name, $"Added Tax Record via API - Description: {taxRecord.Description}");
@@ -353,6 +470,14 @@ namespace CarCareTracker.Controllers
         [Route("/api/vehicle/odometerrecords/latest")]
         public IActionResult LastOdometer(int vehicleId)
         {
+            if (vehicleId == default)
+            {
+                var response = new OperationResponse();
+                response.Success = false;
+                response.Message = "Must provide a valid vehicle id";
+                Response.StatusCode = 400;
+                return Json(response);
+            }
             var result = _vehicleLogic.GetMaxMileage(vehicleId);
             return Json(result);
         }
@@ -361,13 +486,21 @@ namespace CarCareTracker.Controllers
         [Route("/api/vehicle/odometerrecords")]
         public IActionResult OdometerRecords(int vehicleId)
         {
+            if (vehicleId == default)
+            {
+                var response = new OperationResponse();
+                response.Success = false;
+                response.Message = "Must provide a valid vehicle id";
+                Response.StatusCode = 400;
+                return Json(response);
+            }
             var vehicleRecords = _odometerRecordDataAccess.GetOdometerRecordsByVehicleId(vehicleId);
             //determine if conversion is needed.
             if (vehicleRecords.All(x => x.InitialMileage == default))
             {
                 vehicleRecords = _odometerLogic.AutoConvertOdometerRecord(vehicleRecords);
             }
-            var result = vehicleRecords.Select(x => new OdometerRecordExportModel { Date = x.Date.ToShortDateString(), InitialOdometer = x.InitialMileage.ToString(), Odometer = x.Mileage.ToString(), Notes = x.Notes });
+            var result = vehicleRecords.Select(x => new OdometerRecordExportModel { Date = x.Date.ToShortDateString(), InitialOdometer = x.InitialMileage.ToString(), Odometer = x.Mileage.ToString(), Notes = x.Notes, ExtraFields = x.ExtraFields });
             return Json(result);
         }
         [TypeFilter(typeof(CollaboratorFilter))]
@@ -399,7 +532,8 @@ namespace CarCareTracker.Controllers
                     Date = DateTime.Parse(input.Date),
                     Notes = string.IsNullOrWhiteSpace(input.Notes) ? "" : input.Notes,
                     InitialMileage = (string.IsNullOrWhiteSpace(input.InitialOdometer) || int.Parse(input.InitialOdometer) == default) ? _odometerLogic.GetLastOdometerRecordMileage(vehicleId, new List<OdometerRecord>()) : int.Parse(input.InitialOdometer),
-                    Mileage = int.Parse(input.Odometer)
+                    Mileage = int.Parse(input.Odometer),
+                    ExtraFields = input.ExtraFields
                 };
                 _odometerRecordDataAccess.SaveOdometerRecordToVehicle(odometerRecord);
                 StaticHelper.NotifyAsync(_config.GetWebHookUrl(), vehicleId, User.Identity.Name, $"Added Odometer Record via API - Mileage: {odometerRecord.Mileage.ToString()}");
@@ -419,6 +553,14 @@ namespace CarCareTracker.Controllers
         [Route("/api/vehicle/gasrecords")]
         public IActionResult GasRecords(int vehicleId, bool useMPG, bool useUKMPG)
         {
+            if (vehicleId == default)
+            {
+                var response = new OperationResponse();
+                response.Success = false;
+                response.Message = "Must provide a valid vehicle id";
+                Response.StatusCode = 400;
+                return Json(response);
+            }
             var vehicleRecords = _gasRecordDataAccess.GetGasRecordsByVehicleId(vehicleId);
             var result = _gasHelper.GetGasRecordViewModels(vehicleRecords, useMPG, useUKMPG)
                 .Select(x => new GasRecordExportModel { 
@@ -429,7 +571,8 @@ namespace CarCareTracker.Controllers
                     FuelEconomy = x.MilesPerGallon.ToString(),
                     IsFillToFull = x.IsFillToFull.ToString(),
                     MissedFuelUp = x.MissedFuelUp.ToString(),
-                    Notes = x.Notes
+                    Notes = x.Notes,
+                    ExtraFields = x.ExtraFields
                 });
             return Json(result);
         }
@@ -470,7 +613,8 @@ namespace CarCareTracker.Controllers
                     IsFillToFull = bool.Parse(input.IsFillToFull),
                     MissedFuelUp = bool.Parse(input.MissedFuelUp),
                     Notes = string.IsNullOrWhiteSpace(input.Notes) ? "" : input.Notes,
-                    Cost = decimal.Parse(input.Cost)
+                    Cost = decimal.Parse(input.Cost),
+                    ExtraFields = input.ExtraFields
                 };
                 _gasRecordDataAccess.SaveGasRecordToVehicle(gasRecord);
                 if (_config.GetUserConfig(User).EnableAutoOdometerInsert)
@@ -502,9 +646,17 @@ namespace CarCareTracker.Controllers
         [Route("/api/vehicle/reminders")]
         public IActionResult Reminders(int vehicleId)
         {
+            if (vehicleId == default)
+            {
+                var response = new OperationResponse();
+                response.Success = false;
+                response.Message = "Must provide a valid vehicle id";
+                Response.StatusCode = 400;
+                return Json(response);
+            }
             var currentMileage = _vehicleLogic.GetMaxMileage(vehicleId);
             var reminders = _reminderRecordDataAccess.GetReminderRecordsByVehicleId(vehicleId);
-            var results = _reminderHelper.GetReminderRecordViewModels(reminders, currentMileage, DateTime.Now).Select(x=> new ReminderExportModel {  Description = x.Description, Urgency = x.Urgency.ToString(), Metric = x.Metric.ToString(), Notes = x.Notes});
+            var results = _reminderHelper.GetReminderRecordViewModels(reminders, currentMileage, DateTime.Now).Select(x=> new ReminderExportModel {  Description = x.Description, Urgency = x.Urgency.ToString(), Metric = x.Metric.ToString(), Notes = x.Notes, DueDate = x.Date.ToShortDateString(), DueOdometer = x.Mileage.ToString()});
             return Json(results);
         }
         [Authorize(Roles = nameof(UserData.IsRootUser))]
@@ -559,6 +711,49 @@ namespace CarCareTracker.Controllers
         {
             var result = _fileHelper.MakeBackup();
             return Json(result);
+        }
+        [Authorize(Roles = nameof(UserData.IsRootUser))]
+        [HttpGet]
+        [Route("/api/cleanup")]
+        public IActionResult CleanUp(bool deepClean = false)
+        {
+            var jsonResponse = new Dictionary<string, string>();
+            //Clear out temp folder
+            var tempFilesDeleted = _fileHelper.ClearTempFolder();
+            jsonResponse.Add("temp_files_deleted", tempFilesDeleted.ToString());
+            if (deepClean)
+            {
+                //clear out unused vehicle thumbnails
+                var vehicles = _dataAccess.GetVehicles();
+                var vehicleImages = vehicles.Select(x => x.ImageLocation).Where(x => x.StartsWith("/images/")).Select(x=>Path.GetFileName(x)).ToList();
+                if (vehicleImages.Any())
+                {
+                    var thumbnailsDeleted = _fileHelper.ClearUnlinkedThumbnails(vehicleImages);
+                    jsonResponse.Add("unlinked_thumbnails_deleted", thumbnailsDeleted.ToString());
+                }
+                var vehicleDocuments = new List<string>();
+                foreach(Vehicle vehicle in vehicles)
+                {
+                    vehicleDocuments.AddRange(_serviceRecordDataAccess.GetServiceRecordsByVehicleId(vehicle.Id).SelectMany(x => x.Files).Select(y=>Path.GetFileName(y.Location)));
+                    vehicleDocuments.AddRange(_collisionRecordDataAccess.GetCollisionRecordsByVehicleId(vehicle.Id).SelectMany(x => x.Files).Select(y => Path.GetFileName(y.Location)));
+                    vehicleDocuments.AddRange(_upgradeRecordDataAccess.GetUpgradeRecordsByVehicleId(vehicle.Id).SelectMany(x => x.Files).Select(y => Path.GetFileName(y.Location)));
+                    vehicleDocuments.AddRange(_taxRecordDataAccess.GetTaxRecordsByVehicleId(vehicle.Id).SelectMany(x => x.Files).Select(y => Path.GetFileName(y.Location)));
+                    vehicleDocuments.AddRange(_gasRecordDataAccess.GetGasRecordsByVehicleId(vehicle.Id).SelectMany(x => x.Files).Select(y => Path.GetFileName(y.Location)));
+                    vehicleDocuments.AddRange(_noteDataAccess.GetNotesByVehicleId(vehicle.Id).SelectMany(x => x.Files).Select(y => Path.GetFileName(y.Location)));
+                    vehicleDocuments.AddRange(_odometerRecordDataAccess.GetOdometerRecordsByVehicleId(vehicle.Id).SelectMany(x => x.Files).Select(y => Path.GetFileName(y.Location)));
+                    vehicleDocuments.AddRange(_supplyRecordDataAccess.GetSupplyRecordsByVehicleId(vehicle.Id).SelectMany(x => x.Files).Select(y => Path.GetFileName(y.Location)));
+                    vehicleDocuments.AddRange(_planRecordDataAccess.GetPlanRecordsByVehicleId(vehicle.Id).SelectMany(x => x.Files).Select(y => Path.GetFileName(y.Location)));
+                    vehicleDocuments.AddRange(_planRecordTemplateDataAccess.GetPlanRecordTemplatesByVehicleId(vehicle.Id).SelectMany(x => x.Files).Select(y => Path.GetFileName(y.Location)));
+                }
+                //shop supplies
+                vehicleDocuments.AddRange(_supplyRecordDataAccess.GetSupplyRecordsByVehicleId(0).SelectMany(x => x.Files).Select(y => Path.GetFileName(y.Location)));
+                if (vehicleDocuments.Any())
+                {
+                    var documentsDeleted = _fileHelper.ClearUnlinkedDocuments(vehicleDocuments);
+                    jsonResponse.Add("unlinked_documents_deleted", documentsDeleted.ToString());
+                }
+            }
+            return Json(jsonResponse);
         }
         [Authorize(Roles = nameof(UserData.IsRootUser))]
         [HttpGet]

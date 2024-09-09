@@ -10,10 +10,16 @@
         public string LicensePlate { get; set; }
         public string SoldDate { get; set; }
         public bool IsElectric { get; set; } = false;
+        public bool IsDiesel { get; set; } = false;
         public bool UseHours { get; set; } = false;
         public List<ExtraField> ExtraFields { get; set; } = new List<ExtraField>();
         public List<string> Tags { get; set; } = new List<string>();
-        public int LastReportedMileage;
-        public bool HasReminders = false;
+        //Dashboard Metric Attributes
+        public List<DashboardMetric> DashboardMetrics { get; set; } = new List<DashboardMetric>();
+        public int LastReportedMileage { get; set; }
+        public bool HasReminders { get; set; } = false;
+        public decimal CostPerMile { get; set; }
+        public decimal TotalCost { get; set; }
+        public string DistanceUnit { get; set; }
     }
 }

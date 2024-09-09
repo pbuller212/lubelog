@@ -13,6 +13,7 @@
         public decimal PurchasePrice { get; set; }
         public decimal SoldPrice { get; set; }
         public bool IsElectric { get; set; } = false;
+        public bool IsDiesel { get; set; } = false;
         public bool UseHours { get; set; } = false;
         public List<ExtraField> ExtraFields { get; set; } = new List<ExtraField>();
         public List<string> Tags { get; set; } = new List<string>();
@@ -25,5 +26,6 @@
         /// Primarily used for vehicles where the odometer does not reflect actual mileage.
         /// </summary>
         public string OdometerDifference { get; set; } = "0";
+        public List<DashboardMetric> DashboardMetrics { get; set; } = new List<DashboardMetric>();
     }
 }
