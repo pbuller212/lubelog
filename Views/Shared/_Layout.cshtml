@@ -5,6 +5,7 @@
 @{
     var userConfig = config.GetUserConfig(User);
     var useDarkMode = userConfig.UseDarkMode;
+    var useSystemColorMode = userConfig.UseSystemColorMode;
     var enableCsvImports = userConfig.EnableCsvImports;
     var useMPG = userConfig.UseMPG;
     var useMarkDown = userConfig.UseMarkDownOnSavedNotes;
@@ -54,7 +55,7 @@
     <script>
         function getGlobalConfig() {
             return {
-                useDarkMode : "@useDarkMode" == "True",
+                useDarkMode: "@useDarkMode" == "True" || ("@useSystemColorMode" == "True" && window.matchMedia('(prefers-color-scheme: dark)').matches),
                 enableCsvImport : "@enableCsvImports" == "True",
                 useMarkDown: "@useMarkDown" == "True",
                 currencySymbol: decodeHTMLEntities("@numberFormat.CurrencySymbol"),
@@ -111,6 +112,12 @@
                     break;
             }
         }
+        function setThemeBasedOnDevice() {
+            var systemPrefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            if (systemPrefersDarkMode) {
+                $(document.documentElement).attr("data-bs-theme", "dark");
+            }
+        }
     </script>
     @await RenderSectionAsync("Scripts", required: false)
 </head>
@@ -122,3 +129,9 @@
     </div>
 </body>
 </html>
+@if (useSystemColorMode)
+{
+    <script>
+        setThemeBasedOnDevice();
+    </script>
+}

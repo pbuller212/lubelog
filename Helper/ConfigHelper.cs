@@ -12,10 +12,12 @@ namespace CarCareTracker.Helper
         UserConfig GetUserConfig(ClaimsPrincipal user);
         bool SaveUserConfig(ClaimsPrincipal user, UserConfig configData);
         bool AuthenticateRootUser(string username, string password);
+        bool AuthenticateRootUserOIDC(string email);
         string GetWebHookUrl();
         string GetMOTD();
         string GetLogoUrl();
         string GetServerLanguage();
+        bool GetServerDisabledRegistration();
         bool GetServerEnableShopSupplies();
         string GetServerPostgresConnection();
         string GetAllowedFileUploadExtensions();
@@ -89,10 +91,25 @@ namespace CarCareTracker.Helper
             }
             return username == rootUsername && password == rootPassword;
         }
+        public bool AuthenticateRootUserOIDC(string email)
+        {
+            var rootEmail = _config[nameof(UserConfig.DefaultReminderEmail)] ?? string.Empty;
+            var rootUserOIDC = bool.Parse(_config[nameof(UserConfig.EnableRootUserOIDC)]);
+            if (!rootUserOIDC || string.IsNullOrWhiteSpace(rootEmail))
+            {
+                return false;
+            }
+            return email == rootEmail;
+        }
         public string GetServerLanguage()
         {
             var serverLanguage = _config[nameof(UserConfig.UserLanguage)] ?? "en_US";
             return serverLanguage;
+        }
+        public bool GetServerDisabledRegistration()
+        {
+            var registrationDisabled = bool.Parse(_config[nameof(UserConfig.DisableRegistration)]);
+            return registrationDisabled;
         }
         public string GetServerPostgresConnection()
         {
@@ -162,9 +179,11 @@ namespace CarCareTracker.Helper
             {
                 EnableCsvImports = bool.Parse(_config[nameof(UserConfig.EnableCsvImports)]),
                 UseDarkMode = bool.Parse(_config[nameof(UserConfig.UseDarkMode)]),
+                UseSystemColorMode = bool.Parse(_config[nameof(UserConfig.UseSystemColorMode)]),
                 UseMPG = bool.Parse(_config[nameof(UserConfig.UseMPG)]),
                 UseDescending = bool.Parse(_config[nameof(UserConfig.UseDescending)]),
                 EnableAuth = bool.Parse(_config[nameof(UserConfig.EnableAuth)]),
+                EnableRootUserOIDC = bool.Parse(_config[nameof(UserConfig.EnableRootUserOIDC)]),
                 HideZero = bool.Parse(_config[nameof(UserConfig.HideZero)]),
                 UseUKMPG = bool.Parse(_config[nameof(UserConfig.UseUKMPG)]),
                 UseMarkDownOnSavedNotes = bool.Parse(_config[nameof(UserConfig.UseMarkDownOnSavedNotes)]),
@@ -180,7 +199,9 @@ namespace CarCareTracker.Helper
                 VisibleTabs = _config.GetSection(nameof(UserConfig.VisibleTabs)).Get<List<ImportMode>>(),
                 UserColumnPreferences = _config.GetSection(nameof(UserConfig.UserColumnPreferences)).Get<List<UserColumnPreference>>() ?? new List<UserColumnPreference>(),
                 ReminderUrgencyConfig = _config.GetSection(nameof(UserConfig.ReminderUrgencyConfig)).Get<ReminderUrgencyConfig>() ?? new ReminderUrgencyConfig(),
-                DefaultTab = (ImportMode)int.Parse(_config[nameof(UserConfig.DefaultTab)])
+                DefaultTab = (ImportMode)int.Parse(_config[nameof(UserConfig.DefaultTab)]),
+                DefaultReminderEmail = _config[nameof(UserConfig.DefaultReminderEmail)],
+                DisableRegistration = bool.Parse(_config[nameof(UserConfig.DisableRegistration)])
             };
             int userId = 0;
             if (user != null)

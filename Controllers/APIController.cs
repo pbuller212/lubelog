@@ -138,6 +138,7 @@ namespace CarCareTracker.Controllers
                 var upgradeRecords = _upgradeRecordDataAccess.GetUpgradeRecordsByVehicleId(vehicle.Id);
                 var gasRecords = _gasRecordDataAccess.GetGasRecordsByVehicleId(vehicle.Id);
                 var taxRecords = _taxRecordDataAccess.GetTaxRecordsByVehicleId(vehicle.Id);
+                var planRecords = _planRecordDataAccess.GetPlanRecordsByVehicleId(vehicle.Id);
 
                 var resultToAdd = new VehicleInfo()
                 {
@@ -156,7 +157,11 @@ namespace CarCareTracker.Controllers
                     VeryUrgentReminderCount = results.Count(x => x.Urgency == ReminderUrgency.VeryUrgent),
                     PastDueReminderCount = results.Count(x => x.Urgency == ReminderUrgency.PastDue),
                     UrgentReminderCount = results.Count(x => x.Urgency == ReminderUrgency.Urgent),
-                    NotUrgentReminderCount = results.Count(x => x.Urgency == ReminderUrgency.NotUrgent)
+                    NotUrgentReminderCount = results.Count(x => x.Urgency == ReminderUrgency.NotUrgent),
+                    PlanRecordBackLogCount = planRecords.Count(x=>x.Progress == PlanProgress.Backlog),
+                    PlanRecordInProgressCount = planRecords.Count(x=>x.Progress == PlanProgress.InProgress),
+                    PlanRecordTestingCount = planRecords.Count(x=>x.Progress == PlanProgress.Testing),
+                    PlanRecordDoneCount = planRecords.Count(x=>x.Progress == PlanProgress.Done)
                 };
                 //set next reminder
                 if (results.Any(x => (x.Metric == ReminderMetric.Date || x.Metric == ReminderMetric.Both) && x.Date >= DateTime.Now.Date))
@@ -170,6 +175,21 @@ namespace CarCareTracker.Controllers
                 apiResult.Add(resultToAdd);
             }
             return Json(apiResult);
+        }
+        [TypeFilter(typeof(CollaboratorFilter))]
+        [HttpGet]
+        [Route("/api/vehicle/adjustedodometer")]
+        public IActionResult AdjustedOdometer(int vehicleId, int odometer)
+        {
+            var vehicle = _dataAccess.GetVehicleById(vehicleId);
+            if (vehicle == null || !vehicle.HasOdometerAdjustment)
+            {
+                return Json(odometer);
+            } else
+            {
+                var convertedOdometer = (odometer + int.Parse(vehicle.OdometerDifference)) * int.Parse(vehicle.OdometerMultiplier);
+                return Json(convertedOdometer);
+            }
         }
         [TypeFilter(typeof(CollaboratorFilter))]
         [HttpGet]
@@ -666,6 +686,7 @@ namespace CarCareTracker.Controllers
         {
             var vehicles = _dataAccess.GetVehicles();
             List<OperationResponse> operationResponses = new List<OperationResponse>();
+            var defaultEmailAddress = _config.GetUserConfig(User).DefaultReminderEmail;
             foreach(Vehicle vehicle in vehicles)
             {
                 var vehicleId = vehicle.Id;
@@ -681,6 +702,10 @@ namespace CarCareTracker.Controllers
                 //get list of recipients.
                 var userIds = _userAccessDataAccess.GetUserAccessByVehicleId(vehicleId).Select(x => x.Id.UserId);
                 List<string> emailRecipients = new List<string>();
+                if (!string.IsNullOrWhiteSpace(defaultEmailAddress))
+                {
+                    emailRecipients.Add(defaultEmailAddress);
+                }
                 foreach (int userId in userIds)
                 {
                     var userData = _userRecordDataAccess.GetUserRecordById(userId);
@@ -693,15 +718,19 @@ namespace CarCareTracker.Controllers
                 var result = _mailHelper.NotifyUserForReminders(vehicle, emailRecipients, results);
                 operationResponses.Add(result);
             }
-            if (operationResponses.All(x => x.Success))
+            if (!operationResponses.Any())
             {
-                return Json(new OperationResponse { Success = true, Message = "Emails sent" });
+                return Json(new OperationResponse { Success = false, Message = "No Emails Sent, No Vehicles Available or No Recipients Configured" });
+            }
+            else if (operationResponses.All(x => x.Success))
+            {
+                return Json(new OperationResponse { Success = true, Message = $"Emails Sent({operationResponses.Count()})" });
             } else if (operationResponses.All(x => !x.Success))
             {
-                return Json(new OperationResponse { Success = false, Message = "All emails failed, check SMTP settings" });
+                return Json(new OperationResponse { Success = false, Message = $"All Emails Failed({operationResponses.Count()}), Check SMTP Settings" });
             } else
             {
-                return Json(new OperationResponse { Success = true, Message = "Some emails sent, some failed, check recipient settings" });
+                return Json(new OperationResponse { Success = true, Message = $"Emails Sent({operationResponses.Count(x => x.Success)}), Emails Failed({operationResponses.Count(x => !x.Success)}), Check Recipient Settings" });
             }
         }
         [Authorize(Roles = nameof(UserData.IsRootUser))]

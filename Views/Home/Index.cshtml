@@ -13,6 +13,7 @@
 }
 @section Scripts {
     <script src="~/js/garage.js?v=@StaticHelper.VersionNumber"></script>
+    <script src="~/js/settings.js?v=@StaticHelper.VersionNumber"></script>
     <script src="~/js/supplyrecord.js?v=@StaticHelper.VersionNumber"></script>
     <script src="~/lib/drawdown/drawdown.js"></script>
 }
@@ -63,7 +64,7 @@
         <div class="d-flex lubelogger-navbar">
             <img src="@logoUrl" />
             <div class="lubelogger-navbar-button">
-                <button type="button" class="btn @(userConfig.UseDarkMode ? "btn-dark" : "btn-light")" onclick="showMobileNav()"><i class="bi bi-list lubelogger-menu-icon"></i></button>
+                <button type="button" class="btn btn-adaptive" onclick="showMobileNav()"><i class="bi bi-list lubelogger-menu-icon"></i></button>
             </div>
         </div>
     </div>
