@@ -150,6 +150,9 @@ function usePlannerRecordTemplate(planRecordTemplateId) {
             saveScrollPosition();
             getVehiclePlanRecords(vehicleId);
         } else {
+            if (data.message == "Insufficient Supplies") {
+                data.message += `<br /><br /><a class='text-link' style='cursor:pointer;' onclick='orderPlanSupplies(${planRecordTemplateId}, true)'>Order Required Supplies</a>`
+            }
             errorToast(data.message);
         }
     });
@@ -281,13 +284,16 @@ function updatePlanRecordProgress(newProgress) {
             Swal.fire({
                 title: 'Mark Task as Done?',
                 html: `<p>To confirm, please enter the current odometer reading on your vehicle, as we also need the current odometer to auto convert the task into the relevant record.</p>
-                            <input type="text" inputmode="numeric" id="inputOdometer" class="swal2-input" placeholder="Odometer Reading">
+                            <input type="text" inputmode="numeric" id="inputOdometer" class="swal2-input" placeholder="Odometer Reading" onkeydown="handleSwalEnter(event)">
                             `,
                 confirmButtonText: 'Confirm',
                 showCancelButton: true,
                 focusConfirm: false,
                 preConfirm: () => {
-                    const odometer = $("#inputOdometer").val();
+                    var odometer = $("#inputOdometer").val();
+                    if (odometer.trim() == '' && GetVehicleId().odometerOptional) {
+                        odometer = '0';
+                    }
                     if (!odometer || isNaN(odometer)) {
                         Swal.showValidationMessage(`Please enter an odometer reading`)
                     }
@@ -322,4 +328,24 @@ function updatePlanRecordProgress(newProgress) {
             draggedId = 0;
         }
     }
+}
+function orderPlanSupplies(planRecordTemplateId, closeSwal) {
+    if (closeSwal) {
+        Swal.close();
+    }
+    $.get(`/Vehicle/OrderPlanSupplies?planRecordTemplateId=${planRecordTemplateId}`, function (data) {
+        if (data.success != undefined && !data.success) {
+            //success is provided.
+            errorToast(data.message);
+        } else {
+            //hide plan record template modal.
+            hidePlanRecordTemplatesModal();
+            $("#planRecordTemplateSupplyOrderModalContent").html(data);
+            $("#planRecordTemplateSupplyOrderModal").modal('show');
+        }
+    })
+}
+function hideOrderSupplyModal() {
+    $("#planRecordTemplateSupplyOrderModal").modal('hide');
+    showPlanRecordTemplatesModal();
 }

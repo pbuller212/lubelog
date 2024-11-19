@@ -125,51 +125,23 @@ namespace CarCareTracker.Controllers
                 vehicles.AddRange(result);
             }
 
-            List<VehicleInfo> apiResult = new List<VehicleInfo>();
-
-            foreach(Vehicle vehicle in vehicles)
-            {
-                var currentMileage = _vehicleLogic.GetMaxMileage(vehicle.Id);
-                var reminders = _reminderRecordDataAccess.GetReminderRecordsByVehicleId(vehicle.Id);
-                var results = _reminderHelper.GetReminderRecordViewModels(reminders, currentMileage, DateTime.Now);
-
-                var serviceRecords = _serviceRecordDataAccess.GetServiceRecordsByVehicleId(vehicle.Id);
-                var repairRecords = _collisionRecordDataAccess.GetCollisionRecordsByVehicleId(vehicle.Id);
-                var upgradeRecords = _upgradeRecordDataAccess.GetUpgradeRecordsByVehicleId(vehicle.Id);
-                var gasRecords = _gasRecordDataAccess.GetGasRecordsByVehicleId(vehicle.Id);
-                var taxRecords = _taxRecordDataAccess.GetTaxRecordsByVehicleId(vehicle.Id);
-
-                var resultToAdd = new VehicleInfo()
-                {
-                    VehicleData = vehicle,
-                    LastReportedOdometer = currentMileage,
-                    ServiceRecordCount = serviceRecords.Count(),
-                    ServiceRecordCost = serviceRecords.Sum(x=>x.Cost),
-                    RepairRecordCount = repairRecords.Count(),
-                    RepairRecordCost = repairRecords.Sum(x=>x.Cost),
-                    UpgradeRecordCount = upgradeRecords.Count(),
-                    UpgradeRecordCost = upgradeRecords.Sum(x=>x.Cost),
-                    GasRecordCount = gasRecords.Count(),
-                    GasRecordCost = gasRecords.Sum(x=>x.Cost),
-                    TaxRecordCount = taxRecords.Count(),
-                    TaxRecordCost = taxRecords.Sum(x=> x.Cost),
-                    VeryUrgentReminderCount = results.Count(x => x.Urgency == ReminderUrgency.VeryUrgent),
-                    PastDueReminderCount = results.Count(x => x.Urgency == ReminderUrgency.PastDue),
-                    UrgentReminderCount = results.Count(x => x.Urgency == ReminderUrgency.Urgent),
-                    NotUrgentReminderCount = results.Count(x => x.Urgency == ReminderUrgency.NotUrgent)
-                };
-                //set next reminder
-                if (results.Any(x => (x.Metric == ReminderMetric.Date || x.Metric == ReminderMetric.Both) && x.Date >= DateTime.Now.Date))
-                {
-                    resultToAdd.NextReminder = results.Where(x => x.Date >= DateTime.Now.Date).OrderBy(x => x.Date).Select(x => new ReminderExportModel { Description = x.Description, Urgency = x.Urgency.ToString(), Metric = x.Metric.ToString(), Notes = x.Notes, DueDate = x.Date.ToShortDateString(), DueOdometer = x.Mileage.ToString() }).First();
-                }
-                else if (results.Any(x => (x.Metric == ReminderMetric.Odometer || x.Metric == ReminderMetric.Both) && x.Mileage >= currentMileage))
-                {
-                    resultToAdd.NextReminder = results.Where(x => x.Mileage >= currentMileage).OrderBy(x => x.Mileage).Select(x => new ReminderExportModel { Description = x.Description, Urgency = x.Urgency.ToString(), Metric = x.Metric.ToString(), Notes = x.Notes, DueDate = x.Date.ToShortDateString(), DueOdometer = x.Mileage.ToString() }).First();
-                }
-                apiResult.Add(resultToAdd);
-            }
+            var apiResult = _vehicleLogic.GetVehicleInfo(vehicles);
             return Json(apiResult);
+        }
+        [TypeFilter(typeof(CollaboratorFilter))]
+        [HttpGet]
+        [Route("/api/vehicle/adjustedodometer")]
+        public IActionResult AdjustedOdometer(int vehicleId, int odometer)
+        {
+            var vehicle = _dataAccess.GetVehicleById(vehicleId);
+            if (vehicle == null || !vehicle.HasOdometerAdjustment)
+            {
+                return Json(odometer);
+            } else
+            {
+                var convertedOdometer = (odometer + int.Parse(vehicle.OdometerDifference)) * decimal.Parse(vehicle.OdometerMultiplier);
+                return Json(convertedOdometer);
+            }
         }
         [TypeFilter(typeof(CollaboratorFilter))]
         [HttpGet]
@@ -221,7 +193,8 @@ namespace CarCareTracker.Controllers
                     Description = input.Description,
                     Notes = string.IsNullOrWhiteSpace(input.Notes) ? "" : input.Notes,
                     Cost = decimal.Parse(input.Cost),
-                    ExtraFields = input.ExtraFields
+                    ExtraFields = input.ExtraFields,
+                    Tags = string.IsNullOrWhiteSpace(input.Tags) ? new List<string>() : input.Tags.Split(' ').Distinct().ToList()
                 };
                 _serviceRecordDataAccess.SaveServiceRecordToVehicle(serviceRecord);
                 if (_config.GetUserConfig(User).EnableAutoOdometerInsert)
@@ -298,7 +271,8 @@ namespace CarCareTracker.Controllers
                     Description = input.Description,
                     Notes = string.IsNullOrWhiteSpace(input.Notes) ? "" : input.Notes,
                     Cost = decimal.Parse(input.Cost),
-                    ExtraFields = input.ExtraFields
+                    ExtraFields = input.ExtraFields,
+                    Tags = string.IsNullOrWhiteSpace(input.Tags) ? new List<string>() : input.Tags.Split(' ').Distinct().ToList()
                 };
                 _collisionRecordDataAccess.SaveCollisionRecordToVehicle(repairRecord);
                 if (_config.GetUserConfig(User).EnableAutoOdometerInsert)
@@ -375,7 +349,8 @@ namespace CarCareTracker.Controllers
                     Description = input.Description,
                     Notes = string.IsNullOrWhiteSpace(input.Notes) ? "" : input.Notes,
                     Cost = decimal.Parse(input.Cost),
-                    ExtraFields = input.ExtraFields
+                    ExtraFields = input.ExtraFields,
+                    Tags = string.IsNullOrWhiteSpace(input.Tags) ? new List<string>() : input.Tags.Split(' ').Distinct().ToList()
                 };
                 _upgradeRecordDataAccess.SaveUpgradeRecordToVehicle(upgradeRecord);
                 if (_config.GetUserConfig(User).EnableAutoOdometerInsert)
@@ -449,7 +424,8 @@ namespace CarCareTracker.Controllers
                     Description = input.Description,
                     Notes = string.IsNullOrWhiteSpace(input.Notes) ? "" : input.Notes,
                     Cost = decimal.Parse(input.Cost),
-                    ExtraFields = input.ExtraFields
+                    ExtraFields = input.ExtraFields,
+                    Tags = string.IsNullOrWhiteSpace(input.Tags) ? new List<string>() : input.Tags.Split(' ').Distinct().ToList()
                 };
                 _taxRecordDataAccess.SaveTaxRecordToVehicle(taxRecord);
                 StaticHelper.NotifyAsync(_config.GetWebHookUrl(), vehicleId, User.Identity.Name, $"Added Tax Record via API - Description: {taxRecord.Description}");
@@ -533,7 +509,8 @@ namespace CarCareTracker.Controllers
                     Notes = string.IsNullOrWhiteSpace(input.Notes) ? "" : input.Notes,
                     InitialMileage = (string.IsNullOrWhiteSpace(input.InitialOdometer) || int.Parse(input.InitialOdometer) == default) ? _odometerLogic.GetLastOdometerRecordMileage(vehicleId, new List<OdometerRecord>()) : int.Parse(input.InitialOdometer),
                     Mileage = int.Parse(input.Odometer),
-                    ExtraFields = input.ExtraFields
+                    ExtraFields = input.ExtraFields,
+                    Tags = string.IsNullOrWhiteSpace(input.Tags) ? new List<string>() : input.Tags.Split(' ').Distinct().ToList()
                 };
                 _odometerRecordDataAccess.SaveOdometerRecordToVehicle(odometerRecord);
                 StaticHelper.NotifyAsync(_config.GetWebHookUrl(), vehicleId, User.Identity.Name, $"Added Odometer Record via API - Mileage: {odometerRecord.Mileage.ToString()}");
@@ -614,7 +591,8 @@ namespace CarCareTracker.Controllers
                     MissedFuelUp = bool.Parse(input.MissedFuelUp),
                     Notes = string.IsNullOrWhiteSpace(input.Notes) ? "" : input.Notes,
                     Cost = decimal.Parse(input.Cost),
-                    ExtraFields = input.ExtraFields
+                    ExtraFields = input.ExtraFields,
+                    Tags = string.IsNullOrWhiteSpace(input.Tags) ? new List<string>() : input.Tags.Split(' ').Distinct().ToList()
                 };
                 _gasRecordDataAccess.SaveGasRecordToVehicle(gasRecord);
                 if (_config.GetUserConfig(User).EnableAutoOdometerInsert)
@@ -666,6 +644,7 @@ namespace CarCareTracker.Controllers
         {
             var vehicles = _dataAccess.GetVehicles();
             List<OperationResponse> operationResponses = new List<OperationResponse>();
+            var defaultEmailAddress = _config.GetUserConfig(User).DefaultReminderEmail;
             foreach(Vehicle vehicle in vehicles)
             {
                 var vehicleId = vehicle.Id;
@@ -681,6 +660,10 @@ namespace CarCareTracker.Controllers
                 //get list of recipients.
                 var userIds = _userAccessDataAccess.GetUserAccessByVehicleId(vehicleId).Select(x => x.Id.UserId);
                 List<string> emailRecipients = new List<string>();
+                if (!string.IsNullOrWhiteSpace(defaultEmailAddress))
+                {
+                    emailRecipients.Add(defaultEmailAddress);
+                }
                 foreach (int userId in userIds)
                 {
                     var userData = _userRecordDataAccess.GetUserRecordById(userId);
@@ -693,15 +676,19 @@ namespace CarCareTracker.Controllers
                 var result = _mailHelper.NotifyUserForReminders(vehicle, emailRecipients, results);
                 operationResponses.Add(result);
             }
-            if (operationResponses.All(x => x.Success))
+            if (!operationResponses.Any())
             {
-                return Json(new OperationResponse { Success = true, Message = "Emails sent" });
+                return Json(new OperationResponse { Success = false, Message = "No Emails Sent, No Vehicles Available or No Recipients Configured" });
+            }
+            else if (operationResponses.All(x => x.Success))
+            {
+                return Json(new OperationResponse { Success = true, Message = $"Emails Sent({operationResponses.Count()})" });
             } else if (operationResponses.All(x => !x.Success))
             {
-                return Json(new OperationResponse { Success = false, Message = "All emails failed, check SMTP settings" });
+                return Json(new OperationResponse { Success = false, Message = $"All Emails Failed({operationResponses.Count()}), Check SMTP Settings" });
             } else
             {
-                return Json(new OperationResponse { Success = true, Message = "Some emails sent, some failed, check recipient settings" });
+                return Json(new OperationResponse { Success = true, Message = $"Emails Sent({operationResponses.Count(x => x.Success)}), Emails Failed({operationResponses.Count(x => !x.Success)}), Check Recipient Settings" });
             }
         }
         [Authorize(Roles = nameof(UserData.IsRootUser))]

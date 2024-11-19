@@ -1,14 +1,64 @@
 ﻿function getYear() {
     return $("#yearOption").val() ?? '0';
 }
+function getAndValidateSelectedColumns() {
+    var reportVisibleColumns = [];
+    var reportExtraFields = [];
+    $("#columnSelector :checked").map(function () {
+        if ($(this).hasClass('column-default')) {
+            reportVisibleColumns.push(this.value);
+        } else {
+            reportExtraFields.push(this.value);
+        }
+    });
+    if (reportVisibleColumns.length + reportExtraFields.length == 0) {
+        return {
+            hasError: true,
+            visibleColumns: [],
+            extraFields: []
+        }
+    } else {
+        return {
+            hasError: false,
+            visibleColumns: reportVisibleColumns,
+            extraFields: reportExtraFields
+        }
+    }
+}
 function generateVehicleHistoryReport() {
-    var vehicleId = GetVehicleId().vehicleId;
-    $.get(`/Vehicle/GetVehicleHistory?vehicleId=${vehicleId}`, function (data) {
+    $.get(`/Vehicle/GetReportParameters`, function (data) {
         if (data) {
-            $("#vehicleHistoryReport").html(data);
-            setTimeout(function () {
-                window.print();
-            }, 500);
+            //prompt user to select a vehicle
+            Swal.fire({
+                title: 'Select Columns',
+                html: data,
+                confirmButtonText: 'Generate Report',
+                focusConfirm: false,
+                preConfirm: () => {
+                    //validate
+                    var selectedColumnsData = getAndValidateSelectedColumns();
+                    if (selectedColumnsData.hasError) {
+                        Swal.showValidationMessage(`You must select at least one column`);
+                    }
+                    return { selectedColumnsData }
+                },
+            }).then(function (result) {
+                if (result.isConfirmed) {
+                    var vehicleId = GetVehicleId().vehicleId;
+                    $.post(`/Vehicle/GetVehicleHistory?vehicleId=${vehicleId}`, {
+                        reportParameter: result.value.selectedColumnsData
+                    }, function (data) {
+                        if (data) {
+                            $("#vehicleHistoryReport").html(data);
+                            setTimeout(function () {
+                                window.print();
+                            }, 500);
+                        }
+                    })
+                }
+            });
+        } else {
+            errorToast(genericErrorMessage());
         }
     })
 }
@@ -149,9 +199,13 @@ function exportAttachments() {
         <input type="checkbox" id="exportTaxRecord" class="form-check-input me-1" value='TaxRecord'>
         <label for="exportTaxRecord" class='form-check-label'>Taxes</label>
         </div>
-         <div class='form-check form-check-inline'>
+        <div class='form-check form-check-inline'>
         <input type="checkbox" id="exportOdometerRecord" class="form-check-input me-1" value='OdometerRecord'>
         <label for="exportOdometerRecord" class='form-check-label'>Odometer</label>
+        </div>
+        <div class='form-check form-check-inline'>
+        <input type="checkbox" id="exportNoteRecord" class="form-check-input me-1" value='NoteRecord'>
+        <label for="exportNoteRecord" class='form-check-label'>Notes</label>
         </div>
         </div>
         `,
@@ -260,4 +314,13 @@ function loadGlobalSearchResult(recordId, recordType) {
             waitForElement('#planRecordModalContent', showEditPlanRecordModal, recordId);
             break;
     }
+}
+function loadCustomWidgets() {
+    $.get('/Vehicle/GetAdditionalWidgets', function (data) {
+        $("#vehicleCustomWidgetsModalContent").html(data);
+        $("#vehicleCustomWidgetsModal").modal('show');
+    })
+}
+function hideCustomWidgetsModal() {
+    $("#vehicleCustomWidgetsModal").modal('hide');
 }

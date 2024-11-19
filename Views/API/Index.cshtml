@@ -1,5 +1,5 @@
 ﻿@{
-    ViewData["Title"] = "LubeLogger API";
+    ViewData["Title"] = "API";
 }
 <div class="row">
     <div class="d-flex justify-content-center">
@@ -26,7 +26,7 @@
         <h6>Parameters</h6>
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
     <div class="col-1">
         GET
     </div>
@@ -40,7 +40,37 @@
         No Params
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
+    <div class="col-1">
+        GET
+    </div>
+    <div class="col-5 copyable">
+        <code>/api/vehicle/info</code>
+    </div>
+    <div class="col-3">
+        Returns details for list of vehicles or specific vehicle
+    </div>
+    <div class="col-3">
+        VehicleId - Id of Vehicle(optional)
+    </div>
+</div>
+<div class="row api-method">
+    <div class="col-1">
+        GET
+    </div>
+    <div class="col-5 copyable">
+        <code>/api/vehicle/adjustedodometer</code>
+    </div>
+    <div class="col-3">
+        Returns odometer reading with adjustments applied
+    </div>
+    <div class="col-3">
+        vehicleId - Id of Vehicle
+        <br />
+        odometer - Unadjusted odometer
+    </div>
+</div>
+<div class="row api-method">
     <div class="col-1">
         GET
     </div>
@@ -54,7 +84,7 @@
         vehicleId - Id of Vehicle
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
     <div class="col-1">
         GET
     </div>
@@ -68,7 +98,7 @@
         vehicleId - Id of Vehicle
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
     <div class="col-1">
         POST
     </div>
@@ -86,11 +116,12 @@
         initialOdometer - Initial Odometer reading(optional)<br />
         odometer - Odometer reading<br />
         notes - notes(optional)<br />
+        tags - tags separated by space(optional)<br />
         extrafields - <a class="link-body-emphasis link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover reminder-calendar-item" onclick="showExtraFieldsInfo()">extrafields(optional)</a><br />
         }
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
     <div class="col-1">
         GET
     </div>
@@ -104,7 +135,7 @@
         vehicleId - Id of Vehicle
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
     <div class="col-1">
         POST
     </div>
@@ -123,11 +154,12 @@
         description - Description<br/>
         cost - Cost<br />
         notes - notes(optional)<br />
+        tags - tags separated by space(optional)<br />
         extrafields - <a class="link-body-emphasis link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover reminder-calendar-item" onclick="showExtraFieldsInfo()">extrafields(optional)</a><br />
         }
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
     <div class="col-1">
         GET
     </div>
@@ -141,7 +173,7 @@
         vehicleId - Id of Vehicle
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
     <div class="col-1">
         POST
     </div>
@@ -160,11 +192,12 @@
         description - Description<br />
         cost - Cost<br />
         notes - notes(optional)<br />
+        tags - tags separated by space(optional)<br />
         extrafields - <a class="link-body-emphasis link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover reminder-calendar-item" onclick="showExtraFieldsInfo()">extrafields(optional)</a><br />
         }
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
     <div class="col-1">
         GET
     </div>
@@ -178,7 +211,7 @@
         vehicleId - Id of Vehicle
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
     <div class="col-1">
         POST
     </div>
@@ -197,11 +230,12 @@
         description - Description<br />
         cost - Cost<br />
         notes - notes(optional)<br />
+        tags - tags separated by space(optional)<br />
         extrafields - <a class="link-body-emphasis link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover reminder-calendar-item" onclick="showExtraFieldsInfo()">extrafields(optional)</a><br />
         }
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
     <div class="col-1">
         GET
     </div>
@@ -215,7 +249,7 @@
         vehicleId - Id of Vehicle
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
     <div class="col-1">
         POST
     </div>
@@ -233,11 +267,12 @@
         description - Description<br />
         cost - Cost<br />
         notes - notes(optional)<br />
+        tags - tags separated by space(optional)<br />
         extrafields - <a class="link-body-emphasis link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover reminder-calendar-item" onclick="showExtraFieldsInfo()">extrafields(optional)</a><br />
         }
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
     <div class="col-1">
         GET
     </div>
@@ -255,7 +290,7 @@
         useUKMPG(bool) - Use UK Imperial Calculation
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
     <div class="col-1">
         POST
     </div>
@@ -276,11 +311,12 @@
         isFillToFull(bool) - Filled To Full<br />
         missedFuelUp(bool) - Missed Fuel Up<br />
         notes - notes(optional)<br />
+        tags - tags separated by space(optional)<br />
         extrafields - <a class="link-body-emphasis link-offset-2 link-underline-opacity-25 link-underline-opacity-100-hover reminder-calendar-item" onclick="showExtraFieldsInfo()">extrafields(optional)</a><br />
         }
     </div>
 </div>
-<div class="row">
+<div class="row api-method">
     <div class="col-1">
         GET
     </div>
@@ -296,7 +332,7 @@
 </div>
 @if (User.IsInRole(nameof(UserData.IsRootUser)))
 {
-    <div class="row">
+    <div class="row api-method">
         <div class="col-1">
             GET
         </div>
@@ -311,7 +347,7 @@
             urgencies[]=[NotUrgent,Urgent,VeryUrgent,PastDue]
         </div>
     </div>
-    <div class="row">
+    <div class="row api-method">
         <div class="col-1">
             GET
         </div>
@@ -325,7 +361,7 @@
             No Params(must be root user)
         </div>
     </div>
-    <div class="row">
+    <div class="row api-method">
         <div class="col-1">
             GET
         </div>

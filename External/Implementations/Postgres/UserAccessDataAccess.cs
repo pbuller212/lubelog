@@ -1,7 +1,6 @@
 ﻿using CarCareTracker.External.Interfaces;
 using CarCareTracker.Models;
 using Npgsql;
-using System.Net.Mail;
 
 namespace CarCareTracker.External.Implementations
 {
@@ -17,7 +16,7 @@ namespace CarCareTracker.External.Implementations
             try
             {
                 //create table if not exist.
-                string initCMD = $"CREATE TABLE IF NOT EXISTS app.{tableName} (userId INT, vehicleId INT, PRIMARY KEY(userId, vehicleId))";
+                string initCMD = $"CREATE SCHEMA IF NOT EXISTS app; CREATE TABLE IF NOT EXISTS app.{tableName} (userId INT, vehicleId INT, PRIMARY KEY(userId, vehicleId))";
                 using (var ctext = pgDataSource.CreateCommand(initCMD))
                 {
                     ctext.ExecuteNonQuery();
